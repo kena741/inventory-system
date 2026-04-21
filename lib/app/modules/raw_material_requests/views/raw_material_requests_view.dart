@@ -52,6 +52,7 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
     final scheme = Theme.of(context).colorScheme;
     final role =
         parseUserRole(Get.find<AuthController>().currentUser.value?.role);
+    final isManagerLike = role == UserRole.manager || role == UserRole.qualityChecker;
     Widget buildList(
       List<Map<String, dynamic>> requests, {
       bool closedTab = false,
@@ -73,7 +74,7 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
             Text(
               closedTab
                   ? 'Completed and rejected requests appear here.'
-                  : role == UserRole.manager
+                  : isManagerLike
                       ? 'Tap + to request raw materials for purchase.'
                       : 'Nothing in progress for you at this stage.',
               style: Theme.of(context).textTheme.bodySmall,
@@ -282,7 +283,7 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
             }),
           ),
         ),
-        floatingActionButton: role == UserRole.manager
+        floatingActionButton: isManagerLike
             ? FloatingActionButton(
                 heroTag: 'fab_raw_material_requests',
                 onPressed: () => _showCreate(context),
@@ -496,7 +497,7 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
                     ],
                   ),
                 ],
-                if (role == UserRole.manager &&
+                if ((role == UserRole.manager || role == UserRole.qualityChecker) &&
                     statusLc == RawMaterialRequestStatuses.approved) ...[
                   const SizedBox(height: 16),
                   SizedBox(
@@ -526,7 +527,7 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
                     ),
                   ),
                 ],
-                if (role == UserRole.manager &&
+                if ((role == UserRole.manager || role == UserRole.qualityChecker) &&
                     statusLc ==
                         RawMaterialRequestStatuses.sellerConfirmed) ...[
                   const SizedBox(height: 16),
@@ -574,7 +575,12 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
     await controller.refreshVendors();
     if (!context.mounted) return;
 
-    final meters = List.generate(n, (_) => TextEditingController());
+    final meters = List.generate(n, (i) {
+      final it = itemRows[i];
+      final q = it['qty'] ?? it['quantity'] ?? 0;
+      final num? qNum = q is num ? q : num.tryParse(q.toString());
+      return TextEditingController(text: (qNum ?? 0).toString());
+    });
     final unitPrice = List.generate(n, (i) {
       final it = itemRows[i];
       final p = it['last_order_price'] ?? it['lastPrice'];
@@ -727,6 +733,7 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
                                     Expanded(
                                       child: TextField(
                                         controller: meters[index],
+                                        readOnly: true,
                                         keyboardType:
                                             const TextInputType.numberWithOptions(
                                           decimal: true,
@@ -841,19 +848,32 @@ class RawMaterialRequestsView extends GetView<RawMaterialRequestsController> {
                     final lines = <Map<String, dynamic>>[];
                     for (var i = 0; i < n; i++) {
                       final it = itemRows[i];
+                      final requestedRaw = it['qty'] ?? it['quantity'] ?? 0;
+                      final requested =
+                          requestedRaw is num
+                              ? requestedRaw
+                              : (num.tryParse(requestedRaw.toString()) ?? 0);
                       final mid =
                           (it['material_id']?.toString() ?? '').trim();
                       final lineName = (it['name']?.toString() ??
                               it['material_name']?.toString() ??
                               '')
                           .trim();
-                      final m = num.tryParse(meters[i].text.trim()) ?? 0;
+                      // Meters must match what was requested for this item.
+                      final m = requested;
                       final up =
                           num.tryParse(unitPrice[i].text.trim()) ?? 0;
                       final g =
                           num.tryParse(qtyGood[i].text.trim()) ?? 0;
                       final d =
                           num.tryParse(qtyDamaged[i].text.trim()) ?? 0;
+                      if (requested > 0 && (g + d) > requested) {
+                        Get.snackbar(
+                          'Invalid qty',
+                          'For "$lineName": good + damaged cannot exceed requested ($requested).',
+                        );
+                        return;
+                      }
                       lines.add({
                         'vendor_id': selectedVendorId[i],
                         'material_id': mid,

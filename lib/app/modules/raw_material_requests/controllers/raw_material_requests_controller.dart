@@ -113,8 +113,12 @@ class RawMaterialRequestsController extends GetxController {
     required num quantity,
     String? notes,
   }) async {
-    if (_role() != UserRole.manager) {
-      Get.snackbar('Not allowed', 'Only managers can create purchase requests.');
+    final r = _role();
+    if (r != UserRole.manager && r != UserRole.qualityChecker) {
+      Get.snackbar(
+        'Not allowed',
+        'Only managers and quality checkers can create purchase requests.',
+      );
       return;
     }
     await _repo.createRawMaterialRequest(
@@ -131,8 +135,12 @@ class RawMaterialRequestsController extends GetxController {
     required List<Map<String, dynamic>> items,
     required String notes,
   }) async {
-    if (_role() != UserRole.manager) {
-      Get.snackbar('Not allowed', 'Only managers can create purchase requests.');
+    final r = _role();
+    if (r != UserRole.manager && r != UserRole.qualityChecker) {
+      Get.snackbar(
+        'Not allowed',
+        'Only managers and quality checkers can create purchase requests.',
+      );
       return;
     }
     await _repo.createRawMaterialRequestJsonb(
@@ -186,8 +194,12 @@ class RawMaterialRequestsController extends GetxController {
   }
 
   Future<void> managerMarkOrdered(String id) async {
-    if (_role() != UserRole.manager) {
-      Get.snackbar('Not allowed', 'Only a manager can mark a request as ordered.');
+    final r = _role();
+    if (r != UserRole.manager && r != UserRole.qualityChecker) {
+      Get.snackbar(
+        'Not allowed',
+        'Only a manager/quality checker can mark a request as ordered.',
+      );
       return;
     }
     if (_normStatus(_requestById(id)) != RawMaterialRequestStatuses.approved) {
@@ -204,7 +216,7 @@ class RawMaterialRequestsController extends GetxController {
       kind: WorkflowAuditKind.managerOrdered,
       actorUserId: uid,
       actorName: _actorDisplayName(),
-      actorRole: UserRole.manager.name,
+      actorRole: r.name,
     );
     await refreshRequests();
   }
@@ -238,8 +250,12 @@ class RawMaterialRequestsController extends GetxController {
     required List<Map<String, dynamic>> lines,
     DateTime? purchaseDate,
   }) async {
-    if (_role() != UserRole.manager) {
-      Get.snackbar('Not allowed', 'Only a manager can record the receipt.');
+    final r = _role();
+    if (r != UserRole.manager && r != UserRole.qualityChecker) {
+      Get.snackbar(
+        'Not allowed',
+        'Only a manager/quality checker can record the receipt.',
+      );
       return;
     }
     if (_normStatus(_requestById(id)) !=
@@ -266,7 +282,7 @@ class RawMaterialRequestsController extends GetxController {
       managerReceipt: receipt,
       auditActorUserId: uid,
       auditActorName: _actorDisplayName(),
-      auditActorRole: UserRole.manager.name,
+      auditActorRole: r.name,
     );
     await refreshRequests();
     await refreshMaterials();

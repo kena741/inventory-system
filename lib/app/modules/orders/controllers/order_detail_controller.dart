@@ -13,6 +13,7 @@ class OrderDetailController extends GetxController {
   final RxString error = ''.obs;
   final RxList<Map<String, dynamic>> measurements = <Map<String, dynamic>>[].obs;
   final RxMap<String, dynamic> order = <String, dynamic>{}.obs;
+  final RxMap<String, dynamic> qualityCheck = <String, dynamic>{}.obs;
 
   @override
   void onInit() {
@@ -27,6 +28,12 @@ class OrderDetailController extends GetxController {
       final o = await _repo.getCustomerOrder(orderId);
       if (o != null) {
         order.assignAll(o);
+      }
+      final qc = await _repo.getOrderQualityCheck(orderId);
+      if (qc != null) {
+        qualityCheck.assignAll(qc);
+      } else {
+        qualityCheck.clear();
       }
       await _repo.ensureMeasurementsForOrder(orderId: orderId, quantity: quantity);
       measurements.value = await _repo.listMeasurements(orderId);
@@ -46,6 +53,35 @@ class OrderDetailController extends GetxController {
     await _repo.updateCustomerOrderFinalPaymentType(
       orderId: orderId,
       finalPaymentPaymentType: paymentType,
+    );
+    await refreshMeasurements();
+  }
+
+  Future<void> requestQualityCheck({
+    required String checkerId,
+  }) async {
+    await _repo.requestOrderQualityCheck(orderId: orderId, checkerId: checkerId);
+    await refreshMeasurements();
+  }
+
+  Future<void> submitQualityCheck({
+    required String status,
+    required String checkerId,
+    int? embroideryLevel,
+    int? decorationLevel,
+    int? geberLevel,
+    dynamic materialsUsed,
+    String? notes,
+  }) async {
+    await _repo.submitOrderQualityCheck(
+      orderId: orderId,
+      status: status,
+      checkerId: checkerId,
+      embroideryLevel: embroideryLevel,
+      decorationLevel: decorationLevel,
+      geberLevel: geberLevel,
+      materialsUsed: materialsUsed,
+      notes: notes,
     );
     await refreshMeasurements();
   }

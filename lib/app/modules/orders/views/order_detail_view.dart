@@ -31,7 +31,9 @@ class _OrderDetailViewState extends State<OrderDetailView> {
         Get.put(OrderDetailController(orderId: orderId, quantity: quantity), tag: orderId);
     final scheme = Theme.of(context).colorScheme;
     final role = parseUserRole(Get.find<AuthController>().currentUser.value?.role);
-    final canAssignTailor = role == UserRole.admin || role == UserRole.manager;
+    final canAssignTailor = role == UserRole.admin ||
+        role == UserRole.manager ||
+        role == UserRole.qualityChecker;
     final isTailor = role == UserRole.tailor;
     final currentUserId = Get.find<AuthController>().currentUser.value?.id ?? '';
 
@@ -74,6 +76,22 @@ class _OrderDetailViewState extends State<OrderDetailView> {
             children: [
               _OrderHeader(order: order, showPayments: !isTailor),
               const SizedBox(height: 12),
+              if (!isTailor)
+                _QualityCheckCard(
+                  role: role,
+                  controller: controller,
+                  order: order,
+                  qc: controller.qualityCheck,
+                ),
+              if (!isTailor) const SizedBox(height: 12),
+              if (role == UserRole.seller &&
+                  (order['status']?.toString() ?? '').trim().toLowerCase() ==
+                      'completed')
+                _SellerDeliveryCard(controller: controller),
+              if (role == UserRole.seller &&
+                  (order['status']?.toString() ?? '').trim().toLowerCase() ==
+                      'completed')
+                const SizedBox(height: 12),
               if (!isTailor &&
                   (order['status']?.toString().trim().toLowerCase() ??
                           '') ==
@@ -512,6 +530,7 @@ class _OrderHeader extends StatelessWidget {
 
     final statusColor = switch (statusRaw) {
       'completed' => Colors.green.shade700,
+      'delivered' => Colors.green.shade700,
       'cancelled' => Colors.red.shade700,
       'in_progress' => Colors.orange.shade700,
       _ => scheme.primary,
@@ -878,6 +897,500 @@ class _TailorStatusCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SellerDeliveryCard extends StatelessWidget {
+  final OrderDetailController controller;
+  const _SellerDeliveryCard({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: scheme.primary.withValues(alpha: 0.12),
+                  foregroundColor: scheme.primary,
+                  child: const Icon(Icons.local_shipping_outlined),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Delivery',
+                          style: Theme.of(context).textTheme.labelMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Ready to deliver',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Mark delivered'),
+                onPressed: () => controller.updateOrderStatus('delivered'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QualityCheckCard extends StatelessWidget {
+  final UserRole role;
+  final OrderDetailController controller;
+  final Map<String, dynamic> order;
+  final Map<String, dynamic> qc;
+
+  const _QualityCheckCard({
+    required this.role,
+    required this.controller,
+    required this.order,
+    required this.qc,
+  });
+
+  bool get _canRequest {
+    if (role != UserRole.manager) return false;
+    final s = (qc['status']?.toString() ?? '').trim().toLowerCase();
+    return s != 'passed';
+  }
+
+  bool _qcRequested(Map<String, dynamic> qc) {
+    final s = (qc['status']?.toString() ?? '').trim().toLowerCase();
+    return s == 'pending';
+  }
+
+  bool get _canSubmit => role == UserRole.qualityChecker && _qcRequested(qc);
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final repo = ErpRepository();
+    final orderStatus = (order['status']?.toString() ?? 'pending').trim();
+    final qcStatus = (qc['status']?.toString() ?? '').trim();
+    final qcLabel = qcStatus.isEmpty ? 'Not requested' : qcStatus.replaceAll('_', ' ');
+    final checkerId = (qc['checker_id']?.toString() ?? '').trim();
+    final qcPassed = qcStatus.trim().toLowerCase() == 'passed';
+    final orderStatusLc = orderStatus.trim().toLowerCase();
+    final canManagerComplete = qcPassed &&
+        orderStatusLc != 'completed' &&
+        orderStatusLc != 'delivered' &&
+        orderStatusLc != 'cancelled';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: scheme.primary.withValues(alpha: 0.12),
+                  foregroundColor: scheme.primary,
+                  child: const Icon(Icons.verified_outlined),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Quality check',
+                          style: Theme.of(context).textTheme.labelMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        qcLabel,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      if (checkerId.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        FutureBuilder<String?>(
+                          future: repo.getUserDisplayNameById(checkerId),
+                          builder: (context, snap) {
+                            final name = (snap.data ?? '').trim();
+                            return Text(
+                              name.isEmpty ? 'Quality checker' : name,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            );
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (orderStatus.toLowerCase() == 'ready_for_seller')
+                  Chip(
+                    label: const Text('Sent to seller'),
+                    backgroundColor: Colors.green.withValues(alpha: 0.12),
+                    side: BorderSide(color: Colors.green.withValues(alpha: 0.2)),
+                  ),
+              ],
+            ),
+            if (qcStatus.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QcKV(
+                      k: 'Embroidery',
+                      v: (qc['embroidery_level']?.toString() ?? '—'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _QcKV(
+                      k: 'Decoration',
+                      v: (qc['decoration_level']?.toString() ?? '—'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _QcKV(
+                      k: 'Geber',
+                      v: (qc['geber_level']?.toString() ?? '—'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (role == UserRole.manager && canManagerComplete) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: scheme.primary.withValues(alpha: 0.18)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'QC passed',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'You can now mark this order as done (completed) so the seller can deliver it.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.task_alt_outlined),
+                        label: const Text('Mark done (Completed)'),
+                        onPressed: () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Mark order completed'),
+                              content: const Text(
+                                'This will set the order status to completed so the seller can mark it as delivered.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(false),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.of(ctx).pop(true),
+                                  child: const Text('Confirm'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (ok != true) return;
+                          await controller.updateOrderStatus('completed');
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (_canRequest)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.assignment_turned_in_outlined),
+                  label: const Text('Request QC'),
+                  onPressed: () async {
+                    String? selectedId;
+                    await showDialog<void>(
+                      context: context,
+                      builder: (ctx) {
+                        return FutureBuilder<List<Map<String, dynamic>>>(
+                          future: repo.listQualityCheckers(),
+                          builder: (context, snap) {
+                            if (snap.connectionState != ConnectionState.done) {
+                              return const AlertDialog(
+                                title: Text('Request QC'),
+                                content: SizedBox(
+                                  height: 90,
+                                  child: Center(child: CircularProgressIndicator()),
+                                ),
+                              );
+                            }
+                            final users = snap.data ?? <Map<String, dynamic>>[];
+                            if (users.isNotEmpty && selectedId == null) {
+                              selectedId = users.first['id']?.toString();
+                            }
+                            return AlertDialog(
+                              title: const Text('Request QC'),
+                              content: DropdownButtonFormField<String>(
+                                value: selectedId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Quality checker',
+                                ),
+                                items: [
+                                  for (final u in users)
+                                    DropdownMenuItem(
+                                      value: u['id']?.toString(),
+                                      child: Text(
+                                        [
+                                          (u['first_name']?.toString() ?? '').trim(),
+                                          (u['last_name']?.toString() ?? '').trim(),
+                                        ].where((e) => e.isNotEmpty).join(' ').trim().isEmpty
+                                            ? 'Quality checker'
+                                            : [
+                                                (u['first_name']?.toString() ?? '').trim(),
+                                                (u['last_name']?.toString() ?? '').trim(),
+                                              ].where((e) => e.isNotEmpty).join(' '),
+                                      ),
+                                    ),
+                                ],
+                                onChanged: (v) => selectedId = v,
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: users.isEmpty
+                                      ? null
+                                      : () => Navigator.of(ctx).pop(),
+                                  child: const Text('Next'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    );
+                    if (selectedId == null || selectedId!.trim().isEmpty) return;
+                    await controller.requestQualityCheck(checkerId: selectedId!);
+                  },
+                ),
+              ),
+            if (_canSubmit) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.playlist_add_check_outlined),
+                  label: const Text('Submit QC result'),
+                  onPressed: () async {
+                    final notesCtrl = TextEditingController();
+                    var embroidery = (qc['embroidery_level'] as int?) ?? 0;
+                    var decoration = (qc['decoration_level'] as int?) ?? 0;
+                    var geber = (qc['geber_level'] as int?) ?? 0;
+                    String selected = 'passed';
+                    final embroideryCtrl =
+                        TextEditingController(text: embroidery == 0 ? '' : embroidery.toString());
+                    final decorationCtrl =
+                        TextEditingController(text: decoration == 0 ? '' : decoration.toString());
+                    final geberCtrl =
+                        TextEditingController(text: geber == 0 ? '' : geber.toString());
+
+                    await showDialog<void>(
+                      context: context,
+                      builder: (ctx) {
+                        return StatefulBuilder(
+                          builder: (context, setState) {
+                            int clamp05(String raw) {
+                              final v = int.tryParse(raw.trim()) ?? 0;
+                              if (v < 0) return 0;
+                              if (v > 5) return 5;
+                              return v;
+                            }
+
+                            int? parse05OrNull(String raw) {
+                              final s = raw.trim();
+                              if (s.isEmpty) return null;
+                              return clamp05(s);
+                            }
+
+                            return AlertDialog(
+                              title: const Text('Quality check'),
+                              content: SingleChildScrollView(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    DropdownButtonFormField<String>(
+                                      value: selected,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Decision',
+                                      ),
+                                      items: const [
+                                        DropdownMenuItem(
+                                            value: 'passed', child: Text('Passed')),
+                                        DropdownMenuItem(
+                                            value: 'rework', child: Text('Needs rework')),
+                                        DropdownMenuItem(
+                                            value: 'failed', child: Text('Failed')),
+                                      ],
+                                      onChanged: (v) =>
+                                          setState(() => selected = v ?? selected),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: embroideryCtrl,
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Embroidery',
+                                      ),
+                                      onChanged: (v) => setState(() {
+                                        embroidery = clamp05(v);
+                                      }),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextField(
+                                      controller: decorationCtrl,
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Decoration',
+                                      ),
+                                      onChanged: (v) => setState(() {
+                                        decoration = clamp05(v);
+                                      }),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextField(
+                                      controller: geberCtrl,
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Geber',
+                                      ),
+                                      onChanged: (v) => setState(() {
+                                        geber = clamp05(v);
+                                      }),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: notesCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Notes',
+                                      ),
+                                      minLines: 2,
+                                      maxLines: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: () async {
+                                    final checkerId = Get.find<AuthController>()
+                                            .currentUser
+                                            .value
+                                            ?.id ??
+                                        '';
+                                    await controller.submitQualityCheck(
+                                      status: selected,
+                                      checkerId: checkerId,
+                                      embroideryLevel:
+                                          parse05OrNull(embroideryCtrl.text),
+                                      decorationLevel:
+                                          parse05OrNull(decorationCtrl.text),
+                                      geberLevel: parse05OrNull(geberCtrl.text),
+                                      notes: notesCtrl.text.trim(),
+                                    );
+                                    if (ctx.mounted) Navigator.of(ctx).pop();
+                                  },
+                                  child: const Text('Submit'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QcKV extends StatelessWidget {
+  final String k;
+  final String v;
+
+  const _QcKV({required this.k, required this.v});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(k, style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 2),
+          Text(
+            v,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

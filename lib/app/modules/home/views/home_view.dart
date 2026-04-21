@@ -9,9 +9,10 @@ import '../../orders/bindings/orders_binding.dart';
 import '../../orders/views/orders_view.dart';
 import '../../raw_material_requests/bindings/raw_material_requests_binding.dart';
 import '../../raw_material_requests/views/raw_material_requests_view.dart';
+import '../../raw_materials/bindings/raw_materials_binding.dart';
+import '../../raw_materials/views/raw_materials_view.dart';
 import '../../seller_performance/bindings/seller_performance_binding.dart';
 import '../../seller_performance/views/seller_performance_view.dart';
-import '../../stock/views/stock_view.dart';
 import '../../tailor/bindings/tailor_binding.dart';
 import '../../tailor/views/assigned_orders_view.dart';
 import '../../tailor/views/tailor_performance_view.dart';
@@ -59,6 +60,7 @@ class _RoleShell extends StatelessWidget {
     final config = switch (role) {
       UserRole.admin => _adminConfig(),
       UserRole.manager => _managerConfig(),
+      UserRole.qualityChecker => _managerConfig(),
       UserRole.seller => _sellerConfig(),
       UserRole.tailor => _tailorConfig(),
     };
@@ -105,20 +107,21 @@ _adminConfig() {
   DashboardBinding().dependencies();
   OrdersBinding().dependencies();
   RawMaterialRequestsBinding().dependencies();
+  RawMaterialsBinding().dependencies();
   return (
     pages: const [
       DashboardView(),
-      StockView(),
+      RawMaterialsView(),
       OrdersView(),
       RawMaterialRequestsView(),
       MoreView(),
     ],
     destinations: const [
-      NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-      NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
-      NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Orders'),
-      NavigationDestination(icon: Icon(Icons.playlist_add_check_outlined), label: 'Requests'),
-      NavigationDestination(icon: Icon(Icons.grid_view_outlined), label: 'More'),
+      NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Home'),
+      NavigationDestination(icon: Icon(Icons.category_outlined), label: 'Stock'),
+      NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
+      NavigationDestination(icon: Icon(Icons.fact_check_outlined), label: 'Requests'),
+      NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
     ],
     titleForIndex: (idx) => switch (idx) {
       0 => 'Home',
@@ -134,18 +137,19 @@ _adminConfig() {
 _managerConfig() {
   OrdersBinding().dependencies();
   RawMaterialRequestsBinding().dependencies();
+  RawMaterialsBinding().dependencies();
   return (
     pages: const [
       OrdersView(),
-      StockView(),
+      RawMaterialsView(),
       RawMaterialRequestsView(),
       MoreView(),
     ],
     destinations: const [
-      NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Orders'),
-      NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
-      NavigationDestination(icon: Icon(Icons.playlist_add_check_outlined), label: 'Requests'),
-      NavigationDestination(icon: Icon(Icons.grid_view_outlined), label: 'More'),
+      NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
+      NavigationDestination(icon: Icon(Icons.category_outlined), label: 'Stock'),
+      NavigationDestination(icon: Icon(Icons.fact_check_outlined), label: 'Requests'),
+      NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
     ],
     titleForIndex: (idx) => switch (idx) {
       0 => 'Orders',
@@ -168,8 +172,8 @@ _sellerConfig() {
       RawMaterialRequestsView(),
     ],
     destinations: const [
-      NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Orders'),
-      NavigationDestination(icon: Icon(Icons.trending_up_outlined), label: 'Performance'),
+      NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
+      NavigationDestination(icon: Icon(Icons.query_stats_outlined), label: 'Performance'),
       NavigationDestination(icon: Icon(Icons.shopping_bag_outlined), label: 'Purchases'),
     ],
     titleForIndex: (idx) => switch (idx) {
@@ -192,8 +196,8 @@ _tailorConfig() {
     ],
     destinations: const [
       NavigationDestination(icon: Icon(Icons.assignment_ind_outlined), label: 'Assigned'),
-      NavigationDestination(icon: Icon(Icons.insights_outlined), label: 'Performance'),
-      NavigationDestination(icon: Icon(Icons.timer_outlined), label: 'Time'),
+      NavigationDestination(icon: Icon(Icons.query_stats_outlined), label: 'Performance'),
+      NavigationDestination(icon: Icon(Icons.access_time_outlined), label: 'Time'),
     ],
     titleForIndex: (idx) => switch (idx) {
       0 => 'Assigned Orders',

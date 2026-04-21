@@ -1,4 +1,4 @@
-enum UserRole { admin, manager, tailor, seller }
+enum UserRole { admin, manager, qualityChecker, tailor, seller }
 
 enum LocationType { manufacturing, warehouse, retail }
 
@@ -57,6 +57,10 @@ UserRole parseUserRole(String? role) {
       return UserRole.admin;
     case 'manager':
       return UserRole.manager;
+    case 'quality_checker':
+    case 'quality checker':
+    case 'quality-checker':
+      return UserRole.qualityChecker;
     case 'tailor':
       return UserRole.tailor;
     case 'seller':

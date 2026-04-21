@@ -28,8 +28,7 @@ class RawMaterialsView extends GetView<RawMaterialsController> {
         num totalValue = 0;
         for (final m in controller.materials) {
           final ex = (m['existing_quantity'] as num?) ?? 0;
-          final nq = (m['new_quantity'] as num?) ?? 0;
-          totalStockQty += ex + nq;
+          totalStockQty += ex;
           totalValue += (m['total_price'] as num?) ?? 0;
         }
 
@@ -164,7 +163,6 @@ class RawMaterialsView extends GetView<RawMaterialsController> {
                   return Column(
                     children: controller.materials.map((m) {
                       final existing = (m['existing_quantity'] as num?) ?? 0;
-                      final newQty = (m['new_quantity'] as num?) ?? 0;
                       final unit = (m['unit']?.toString() ?? 'pcs');
                       final totalPrice = (m['total_price'] as num?) ?? 0;
                       final addedDate =
@@ -205,7 +203,7 @@ class RawMaterialsView extends GetView<RawMaterialsController> {
                                 children: [
                                   _Pill(
                                     label: 'Qty',
-                                    value: '${existing + newQty} $unit',
+                                    value: '$existing $unit',
                                     color: scheme.primary,
                                   ),
                                 ],
@@ -535,8 +533,7 @@ class _RawMaterialsTable extends StatelessWidget {
           final name = (m['name']?.toString() ?? 'Material').trim();
           final unit = (m['unit']?.toString() ?? 'pcs').trim();
           final existing = _num(m['existing_quantity']);
-          final newQty = _num(m['new_quantity']);
-          final qty = existing + newQty;
+          final qty = existing;
           final totalPrice = _num(m['total_price']);
           final oldPrice = _num(m['old_unit_price']);
           final newPrice = _num(m['new_unit_price'] ?? m['unit_price']);

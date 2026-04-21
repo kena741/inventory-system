@@ -9,27 +9,27 @@ alter table if exists public.customer_orders
   add column if not exists manager_id uuid null;
 
 alter table if exists public.customer_orders
-  add column if not exists created_by uuid null;
+  add column if not exists seller_id uuid null;
 
 alter table if exists public.customer_orders
   add column if not exists completed_at timestamp without time zone null;
 
 -- Optional: add foreign keys (pick ONE target that matches your ids)
--- If tailor_id/created_by reference public.users.id:
+-- If tailor_id/seller_id reference public.users.id:
 -- alter table public.customer_orders
 --   add constraint customer_orders_tailor_id_fkey foreign key (tailor_id) references public.users(id) on delete set null;
 -- alter table public.customer_orders
 --   add constraint customer_orders_manager_id_fkey foreign key (manager_id) references public.users(id) on delete set null;
 -- alter table public.customer_orders
---   add constraint customer_orders_created_by_fkey foreign key (created_by) references public.users(id) on delete set null;
+--   add constraint customer_orders_seller_id_fkey foreign key (seller_id) references public.users(id) on delete set null;
 
--- If tailor_id/created_by reference auth.users.id:
+-- If tailor_id/seller_id reference auth.users.id:
 -- alter table public.customer_orders
 --   add constraint customer_orders_tailor_id_fkey foreign key (tailor_id) references auth.users(id) on delete set null;
 -- alter table public.customer_orders
 --   add constraint customer_orders_manager_id_fkey foreign key (manager_id) references auth.users(id) on delete set null;
 -- alter table public.customer_orders
---   add constraint customer_orders_created_by_fkey foreign key (created_by) references auth.users(id) on delete set null;
+--   add constraint customer_orders_seller_id_fkey foreign key (seller_id) references auth.users(id) on delete set null;
 
 
 -- 2) Raw material purchase requests

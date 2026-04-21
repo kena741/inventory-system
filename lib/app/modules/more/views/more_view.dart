@@ -7,8 +7,6 @@ import '../../expenses/bindings/expenses_binding.dart';
 import '../../expenses/views/expenses_view.dart';
 import '../../locations/bindings/locations_binding.dart';
 import '../../locations/views/locations_view.dart';
-import '../../raw_materials/bindings/raw_materials_binding.dart';
-import '../../raw_materials/views/raw_materials_view.dart';
 import '../../tailor/controllers/admin_tailor_team_performance_controller.dart';
 import '../../tailor/views/admin_tailor_team_performance_view.dart';
 import '../../user_management/views/role_users_view.dart';
@@ -33,21 +31,6 @@ class MoreView extends StatelessWidget {
         const _SectionHeader(title: 'Management'),
         _SettingsCard(
           children: [            
-            _SettingsTile(
-              title: 'Raw Materials',
-              subtitle: 'Manage raw materials',
-              icon: Icons.category_outlined,
-              onTap: () {
-                RawMaterialsBinding().dependencies();
-                Get.to(
-                  () => Scaffold(
-                    appBar: AppBar(title: const Text('Raw Materials')),
-                    body: const RawMaterialsView(),
-                  ),
-                );
-              },
-            ),
-            const _TileDivider(),
             _SettingsTile(
               title: 'Expenses',
               subtitle: 'Track operational expenses',

@@ -78,7 +78,8 @@ class ErpRepository {
     await _db.from('raw_materials').insert({
       'name': name,
       'unit': unit,
-      'existing_quantity': 0,
+      // `existing_quantity` is the total stock on hand.
+      'existing_quantity': newQuantity,
       'new_quantity': newQuantity,
       'new_quantity_added_date': DateTime.now().toIso8601String(),
       // Schema update: unit_price -> new_unit_price, add old_unit_price
@@ -234,7 +235,7 @@ class ErpRepository {
           if ((customerNumber ?? '').trim().isNotEmpty)
             'customer_number': customerNumber!.trim(),
           'initial_payment_payment_type': initialPt,
-          if (createdBy != null) 'created_by': createdBy,
+          if (createdBy != null) 'seller_id': createdBy,
           if (completedAt != null) 'completed_at': completedAt,
         })
         .select()
@@ -281,6 +282,7 @@ class ErpRepository {
     await _db.from('customer_orders').update({
       'status': status,
       if (status == 'completed') 'completed_at': DateTime.now().toIso8601String(),
+      if (status == 'delivered') 'delivered_at': DateTime.now().toIso8601String(),
     }).eq('id', orderId);
   }
 
@@ -291,6 +293,71 @@ class ErpRepository {
         .eq('role', 'tailor')
         .order('first_name', ascending: true);
     return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> listQualityCheckers() async {
+    final rows = await _db
+        .from('users')
+        .select('id,first_name,last_name,role')
+        .eq('role', 'quality_checker')
+        .order('first_name', ascending: true);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>?> getOrderQualityCheck(String orderId) async {
+    final row = await _db
+        .from('order_quality_checks')
+        .select()
+        .eq('order_id', orderId)
+        .maybeSingle();
+    return row;
+  }
+
+  /// Manager requests QC by creating/updating one QC row for the order.
+  Future<void> requestOrderQualityCheck({
+    required String orderId,
+    required String checkerId,
+  }) async {
+    final tailorId = (await getCustomerOrder(orderId))?['tailor_id']?.toString();
+    await _db.from('order_quality_checks').upsert({
+      'order_id': orderId,
+      'checker_id': checkerId,
+      if ((tailorId ?? '').trim().isNotEmpty) 'tailor_id': tailorId,
+      'status': 'pending',
+      'updated_at': DateTime.now().toIso8601String(),
+    }, onConflict: 'order_id');
+
+    // Route order to QC queue.
+    await updateCustomerOrderStatus(orderId: orderId, status: 'qc_pending');
+  }
+
+  /// Quality checker submits result; order routes to seller or back to manager.
+  Future<void> submitOrderQualityCheck({
+    required String orderId,
+    required String status, // passed | rework | failed
+    required String checkerId,
+    int? embroideryLevel,
+    int? decorationLevel,
+    int? geberLevel,
+    dynamic materialsUsed,
+    String? notes,
+  }) async {
+    await _db.from('order_quality_checks').upsert({
+      'order_id': orderId,
+      'checker_id': checkerId,
+      'status': status,
+      if (embroideryLevel != null) 'embroidery_level': embroideryLevel,
+      if (decorationLevel != null) 'decoration_level': decorationLevel,
+      if (geberLevel != null) 'geber_level': geberLevel,
+      if (materialsUsed != null) 'materials_used': materialsUsed,
+      if ((notes ?? '').trim().isNotEmpty) 'notes': notes!.trim(),
+      'updated_at': DateTime.now().toIso8601String(),
+    }, onConflict: 'order_id');
+
+    final next = (status.trim().toLowerCase() == 'passed')
+        ? 'ready_for_seller'
+        : 'manager_review';
+    await updateCustomerOrderStatus(orderId: orderId, status: next);
   }
 
   /// Completed orders with `tailor_id` in local-date window `[rangeStart, rangeEndExclusive)`.
@@ -762,20 +829,25 @@ class ErpRepository {
     final prevEndStr =
         '${prevEnd.year}-${prevEnd.month.toString().padLeft(2, '0')}-${prevEnd.day.toString().padLeft(2, '0')}';
 
-    final openRows = await _db
+  
+    final lastRow = await _db
         .from('price_history')
-        .select('id,end_date')
-        .eq('raw_material_id', rawMaterialId);
+        .select('id,end_date,start_date,created_at')
+        .eq('raw_material_id', rawMaterialId)
+        .order('start_date', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
 
-    final list = (openRows as List).cast<Map<String, dynamic>>();
-    for (final r in list) {
-      if (r['end_date'] != null) continue;
-      final hid = r['id']?.toString();
-      if (hid == null || hid.isEmpty) continue;
-      await _db
-          .from('price_history')
-          .update({'end_date': prevEndStr})
-          .eq('id', hid);
+    final lastId = lastRow?['id']?.toString();
+    if (lastId != null && lastId.isNotEmpty) {
+      final lastEnd = lastRow?['end_date'];
+      if (lastEnd == null) {
+        await _db
+            .from('price_history')
+            .update({'end_date': prevEndStr})
+            .eq('id', lastId);
+      }
     }
 
     final startStr =
@@ -807,11 +879,13 @@ class ErpRepository {
         .maybeSingle();
     if (row == null) return;
 
-    final nq = _coerceNum(row['new_quantity']);
+    final existingQty = _coerceNum(row['existing_quantity']);
     final oldTotal = _coerceNum(row['total_price']);
     final lineValue = quantityGood * unitPrice;
     final patch = <String, dynamic>{
-      'new_quantity': nq + quantityGood,
+      'new_quantity': quantityGood,
+      // `existing_quantity` is the total stock on hand.
+      'existing_quantity': existingQty + quantityGood,
       'new_quantity_added_date': DateTime.now().toIso8601String(),
       'total_price': oldTotal + lineValue,
     };
@@ -1024,12 +1098,12 @@ class ErpRepository {
 
     dynamic q = _db
         .from('customer_orders')
-        .select('id,created_at,created_by,initial_payment');
+        .select('id,created_at,seller_id,initial_payment');
 
     if (profileId != null && profileId.isNotEmpty) {
-      q = q.eq('created_by', profileId);
+      q = q.eq('seller_id', profileId);
     } else if (uid != null && uid.isNotEmpty) {
-      q = q.eq('created_by', uid);
+      q = q.eq('seller_id', uid);
     }
 
     final rows = await q;
